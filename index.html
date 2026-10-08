@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecotrack - Huella de carbono</title>
+    
+    <!-- Librerías de Firebase en la nube -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f9f4; color: #333; padding: 15px; }
+        .container { max-width: 800px; margin: 0 auto; width: 100%; }
+        header { text-align: center; margin-bottom: 30px; color: #2c786c; }
+        header h1 { font-size: 2.2rem; margin-bottom: 5px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; border-top: 4px solid #2c786c; width: 100%; }
+        .hidden { display: none; }
+        h2 { margin-bottom: 15px; color: #2c786c; font-size: 1.4rem; }
+        .user-controls, .form-group, .user-list { margin-bottom: 15px; width: 100%; }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 20px; }
+        input, select { padding: 12px; border: 1px solid #ccc; border-radius: 6px; width: 100%; font-size: 1rem; }
+        button { padding: 12px 20px; background-color: #2c786c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; width: 100%; transition: background 0.3s, transform 0.1s; }
+        button:hover { background-color: #1b5048; }
+        button:active { transform: scale(0.98); }
+        .btn-delete { background-color: #ffebee; color: #d32f2f; border: 1px solid #ffcdd2; padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; width: auto; transition: all 0.2s; }
+        .btn-delete:hover { background-color: #d32f2f; color: white; }
+        .tip-box { background-color: #e3f2fd; border-left: 5px solid #2196f3; padding: 15px; margin-bottom: 20px; border-radius: 6px; }
+        .tip-box h3 { color: #0d47a1; font-size: 1.1rem; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+        .tip-box p { color: #1565c0; font-size: 0.95rem; line-height: 1.5; }
+        .stats { display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px; }
+        .stat-box { background: #e8f5e9; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #c8e6c9; }
+        .stat-box p { font-size: 28px; font-weight: bold; color: #2c786c; }
+        .log-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; font-size: 0.95rem; background-color: #fafafa; border-radius: 6px; margin-bottom: 8px; }
+        .leaderboard-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: #f8faf8; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #4CAF50; }
+        .leaderboard-item strong { color: #2c786c; font-size: 1.1rem; }
+        .badge { background-color: #e74c3c; color: white; padding: 5px 10px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
+        .diet-guide { background-color: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-top: 20px; }
+        .diet-guide h3 { color: #2c786c; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; margin-bottom: 15px; }
+        .diet-list { list-style: none; }
+        .diet-list li { margin-bottom: 12px; padding-left: 25px; position: relative; line-height: 1.4; }
+        .diet-list li::before { content: "🌱"; position: absolute; left: 0; top: 0; }
+
+        @media (min-width: 600px) {
+            body { padding: 30px; }
+            .card { padding: 30px; }
+            .user-controls { display: flex; gap: 10px; align-items: center; }
+            .form-grid { grid-template-columns: 1fr 1fr; }
+            input, select { max-width: 100%; }
+            .user-controls input { max-width: 350px; }
+            button { width: auto; }
+            .btn-submit { width: 100%; max-width: none; }
+            .stats { flex-direction: row; }
+            .stat-box { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>🌿 Ecotrack</h1>
+            <p>Monitorea tu huella de carbono en la nube</p>
+        </header>
+
+        <section class="card" id="group-section">
+            <h2>🌍 Impacto de todos los compañeros</h2>
+            <div id="leaderboard-list"><p style="color: #777;">Cargando base de datos...</p></div>
+        </section>
+
+        <section class="card" id="user-section">
+            <h2>👥 Perfiles</h2>
+            <div class="user-controls">
+                <input type="text" id="new-username" placeholder="Ingresa un nombre">
+                <button onclick="createUser()">Crear perfil</button>
+            </div>
+            <div class="user-list">
+                <label for="user-select">Usuario actual:</label>
+                <select id="user-select" onchange="switchUser()">
+                    <option value="">-- Seleccionar --</option>
+                </select>
+            </div>
+        </section>
+
+        <section class="card hidden" id="tracker-section">
+            <h2 id="greeting">Registro diario</h2>
+            <form id="eco-form" onsubmit="addRecord(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>🥩 Carne de res o cordero (porciones):</label>
+                        <input type="number" id="beef" value="0" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>🍗 Cerdo, pollo o pescado (porciones):</label>
+                        <input type="number" id="chicken" value="0" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>🧀 Lácteos y huevos (porciones):</label>
+                        <input type="number" id="dairy" value="0" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>🍚 Arroz, cereales o pan (porciones):</label>
+                        <input type="number" id="rice" value="0" min="0" required>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>🥗 Frutas y vegetales (porciones):</label>
+                        <input type="number" id="veggie" value="0" min="0" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit">Guardar registro</button>
+            </form>
+        </section>
+
+        <section class="card hidden" id="analysis-section">
+            <h2>📊 Análisis personal</h2>
+            <div id="tip-box" class="tip-box hidden">
+                <h3>💡 Dato sustentable del día</h3>
+                <p id="tip-text"></p>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <h3>Total de CO2</h3>
+                    <p id="total-co2">0 kg</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Árboles necesarios</h3>
+                    <p id="trees-needed">0</p>
+                </div>
+            </div>
+            <div id="history-log"></div>
+            
+            <div class="diet-guide">
+                <h3>🍽️ Guía: la dieta de salud planetaria</h3>
+                <p style="margin-bottom: 15px; color: #555; font-size: 0.95rem;">Desarrollada por científicos de la comisión EAT-Lancet, esta estructura nutricional está diseñada para alimentar a la población en el futuro sin agotar los recursos de la Tierra.</p>
+                <ul class="diet-list">
+                    <li><strong>50% del plato: verduras y frutas.</strong> Prioriza el consumo local y de temporada. Reduce la huella de transporte y evita el uso de plásticos en su compra.</li>
+                    <li><strong>Proteínas de bajo impacto:</strong> obtén tus proteínas principalmente de leguminosas (frijoles, lentejas, garbanzos) y nueces. Requieren un 90% menos agua que la carne.</li>
+                    <li><strong>Carnes blancas y huevos:</strong> si consumes proteína animal, prefiere pollo o pescado criado de forma sustentable, de manera moderada.</li>
+                    <li><strong>Lácteos limitados:</strong> un vaso de leche o un trozo pequeño de queso al día. La industria lechera es una fuente intensiva de metano.</li>
+                    <li><strong>Reducción de carnes rojas:</strong> la res y el cordero deben considerarse una guarnición o un lujo ocasional, no el centro del plato diario.</li>
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWqDOkm7hmr48_DBTq6hq9jqxCG2ZXC1k",
+            authDomain: "proyecto-ingenieria-72288.firebaseapp.com",
+            databaseURL: "https://proyecto-ingenieria-72288-default-rtdb.firebaseio.com",
+            projectId: "proyecto-ingenieria-72288",
+            storageBucket: "proyecto-ingenieria-72288.firebasestorage.app",
+            messagingSenderId: "804521322696",
+            appId: "1:804521322696:web:6ef19aebfccd6bc8b91dfd"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const usersRef = database.ref('users');
+
+        const CO2_FACTORS = { beef: 4.5, chicken: 1.2, dairy: 1.5, rice: 0.7, veggie: 0.3 };
+        const TIPS = {
+            highBeef: [
+                "Un solo kilo de carne de res requiere hasta 15,000 litros de agua. Sustituirla por pollo ahorra más de la mitad de ese recurso.",
+                "El ganado vacuno produce metano en su digestión, un gas que atrapa 86 veces más calor que el CO2 a corto plazo.",
+                "La ganadería es responsable de gran parte de la deforestación. Reducir la carne roja protege directamente los bosques."
+            ],
+            highDairy: [
+                "El queso amarillo duro tiene una huella de carbono alta debido a la gran cantidad de leche que requiere. Prueba alternativas vegetales.",
+                "Sustituir tu leche de vaca por leche de avena o almendras puede reducir las emisiones de tu desayuno hasta en un 70%."
+            ],
+            highRice: [
+                "Los campos de arroz tradicionales inundados son grandes emisores de metano agrícola. Intercalar con granos enteros como avena o quinoa ayuda al equilibrio."
+            ],
+            goodDiet: [
+                "¡Excelente trabajo! Una alimentación basada en plantas disminuye drásticamente tu impacto hídrico y ambiental.",
+                "Al evitar productos animales de alto impacto, estás ayudando a reducir la acidificación de los océanos y la pérdida de biodiversidad."
+            ],
+            generalInfo: [
+                "El 30% de la comida producida a nivel mundial se desperdicia. Comer las sobras es vital para reducir emisiones.",
+                "Evita las botellas de plástico de un solo uso; su huella de carbono por extracción de petróleo y transporte es enorme."
+            ]
+        };
+
+        let users = {};
+        let currentUser = null;
+
+        usersRef.on('value', (snapshot) => {
+            users = snapshot.val() || {};
+            updateUserSelect();
+            updateLeaderboard();
+            
+            if (currentUser && users
